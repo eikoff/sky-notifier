@@ -76,7 +76,7 @@ def check_aurora() -> None:
     is_test = GITHUB_EVENT_NAME == "workflow_dispatch"
     alert_text = ""
 
-    # 1️⃣ Solar Flares
+    #  Solar Flares
     alert_text += check_solar_flares()
 
     # 2️⃣ Live-Check (Nur nachts zwischen 22:00 und 03:00 Uhr)
@@ -89,7 +89,7 @@ def check_aurora() -> None:
         except:
             pass
 
-    # 3️⃣ Kp-Forecast mit korrekter Trend-Logik
+    #  Kp-Forecast mit korrekter Trend-Logik
     try:
         forecast = session.get(URL_KP_FORECAST, timeout=10).json()
         found_kp = []
@@ -116,16 +116,16 @@ def check_aurora() -> None:
     except:
         pass
 
-    # 4️⃣ Senden
+    #  Senden
     if alert_text or is_test:
-        caption = "🧪 **BOT TESTLAUF**\n\n" if is_test else "🌌 **AURORA UPDATE** 🌌\n\n"
+        caption = "**BOT TESTLAUF**\n\n" if is_test else "**AURORA UPDATE**\n\n"
         
         if alert_text:
             caption += alert_text
         else:
             caption += "Aktuell keine erhöhten Werte (Kp < 6)."
         
-        caption += f"\n\n🕒 Stand: {now_de.strftime('%H:%M')} Uhr (DE)"
+        caption += f"\n\n Stand: {now_de.strftime('%H:%M')} Uhr (DE)"
         
         send_telegram_photo(URL_OVATION_MAP, caption)
 
