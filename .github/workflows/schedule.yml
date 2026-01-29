@@ -1,0 +1,28 @@
+name: Aurora Check
+
+on:
+  schedule:
+    # Dies führt das Skript jede volle Stunde aus
+    - cron: '0 * * * *'
+  workflow_dispatch: # Erlaubt den manuellen Start per Klick
+
+jobs:
+  run-aurora-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v3
+
+      - name: Python installieren
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Bibliotheken installieren
+        run: pip install requests pytz
+
+      - name: Skript ausführen
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python aurora_bot.py
