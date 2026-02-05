@@ -1,0 +1,29 @@
+name: Plane Spotter Harz
+
+on:
+  schedule:
+    # Läuft alle 20 Minuten (0, 20, 40)
+    - cron: '*/20 * * * *'
+  workflow_dispatch: # Erlaubt manuellen Test-Knopf
+
+jobs:
+  check-air-traffic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v3
+
+      - name: Python installieren
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Bibliotheken installieren
+        run: pip install requests
+
+      - name: Plane Script ausführen
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: python plane_bot.py
