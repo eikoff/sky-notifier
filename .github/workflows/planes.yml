@@ -19,7 +19,7 @@ jobs:
           python-version: '3.9'
 
       - name: Bibliotheken installieren
-        run: pip install requests
+        run: pip install requests pytz
 
       - name: Plane Script ausführen
         env:
