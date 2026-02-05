@@ -71,9 +71,9 @@ def check_planes():
             status = ""
             # Logik: Im Nahbereich (10km) oder im Anflug (Kurs stimmt & ETA < 20 Min)
             if dist < 10:
-                status = "🔴 **DIREKT ÜBER DIR / NAHBEREICH**"
+                status = "🔴 **DIREKT ÜBERM NORDHARZ**"
             elif angle_diff < 25 and eta < 22:
-                status = f"🟡 **ANFLUG AUF DEINEN STANDORT** (ETA: {round(eta)} Min)"
+                status = f"🟡 **ANFLUG AUF NORDHARZ** (ETA: {round(eta)} Min)"
             
             # Sonder-Filter: Notfall oder Militär (GAF = German Air Force)
             if squawk in ["7700", "7600"] or callsign.startswith(("GAF", "NATO", "DUKE")):
@@ -85,13 +85,13 @@ def check_planes():
 
     # Senden der Nachricht
     if alerts or GITHUB_EVENT_NAME == "workflow_dispatch":
-        msg = "✈️ **HARZ RADAR (GOSLAR/OKER)**\n\n"
+        msg = "✈️ **NORDHARZ RADAR**\n\n"
         if alerts:
             msg += "\n\n".join(alerts[:5])
 # Senden der Nachricht
     if alerts:
         # Wenn Flugzeuge da sind: Sende die Liste
-        msg = "✈️ **HARZ RADAR (GOSLAR/OKER)**\n\n" + "\n\n".join(alerts[:5])
+        msg = "✈️ **NORDHARZ RADAR**\n\n" + "\n\n".join(alerts[:5])
         requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage", 
                       json={"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown", "disable_web_page_preview": True})
     
