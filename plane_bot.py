@@ -52,8 +52,8 @@ def check_planes():
                 is_special = True
                 tags.append("🎖️ MILITÄR")
 
-            # FILTER 3: Tiefflug (unter 2000m)
-            if 0 < altitude < 2000:
+            # FILTER 3: Tiefflug (unter 1000m)
+            if 0 < altitude < 1000:
                 is_special = True
                 tags.append("⬇️ TIEFFLUG")
 
