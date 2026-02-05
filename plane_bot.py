@@ -88,11 +88,18 @@ def check_planes():
         msg = "✈️ **HARZ RADAR (GOSLAR/OKER)**\n\n"
         if alerts:
             msg += "\n\n".join(alerts[:5])
-        else:
-            msg += "Aktuell kein relevanter Anflug im Zeitfenster."
-            
+# Senden der Nachricht
+    if alerts:
+        # Wenn Flugzeuge da sind: Sende die Liste
+        msg = "✈️ **HARZ RADAR (GOSLAR/OKER)**\n\n" + "\n\n".join(alerts[:5])
         requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage", 
                       json={"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown", "disable_web_page_preview": True})
+    
+    elif GITHUB_EVENT_NAME == "workflow_dispatch":
+        # Wenn KEINE Flugzeuge da sind, aber du MANUELL auf "Run" gedrückt hast:
+        msg = "🧪 **TEST ERFOLGREICH**: Bot ist aktiv, aber aktuell ist kein Flugzeug im Fokus."
+        requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage", 
+                      json={"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"})
 
 if __name__ == "__main__":
     check_planes()
