@@ -57,7 +57,8 @@ def check_planes():
             
             # Nur weitermachen, wenn es Militär oder ein Notfall ist
             # ODER wenn es KEIN ignorierter Flieger ist UND sehr tief fliegt (z.B. Rettungshubschrauber)
-            is_special = is_military or is_emergency or (not is_ignored and alt < 1500 and alt > 0)
+            #is_special = is_military or is_emergency or (not is_ignored and alt < 1500 and alt > 0)
+            is_special = is_military or is_emergency
 
             if not is_special:
                 continue
