@@ -7,7 +7,7 @@ import time
 # ─────────────────── KONFIGURATION ───────────────────
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
-KP_THRESHOLD = 6
+KP_THRESHOLD = 7
 GITHUB_EVENT_NAME = os.environ.get("GITHUB_EVENT_NAME", "")
 
 GERMAN_TZ = pytz.timezone("Europe/Berlin")
