@@ -1,133 +1,162 @@
 import os
 import requests
-from datetime import datetime
 import pytz
 import time
+from datetime import datetime
 
 # ─────────────────── KONFIGURATION ───────────────────
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
-KP_THRESHOLD = 7
+KP_THRESHOLD = 6
 GITHUB_EVENT_NAME = os.environ.get("GITHUB_EVENT_NAME", "")
-
 GERMAN_TZ = pytz.timezone("Europe/Berlin")
 
-# ───────────────────── QUELLEN ───────────────────────
+# NOAA API Endpunkte
 URL_KP_FORECAST = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json"
 URL_KP_LIVE = "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json"
 URL_ALERTS = "https://services.swpc.noaa.gov/products/alerts.json"
 URL_OVATION_MAP = "https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg"
 
+# Globaler Session-Header
 session = requests.Session()
-session.headers.update({"User-Agent": "AuroraBot/1.2"})
+session.headers.update({"User-Agent": "AuroraBot_Goslar_V3"})
 
-# ─────────────────── TELEGRAM ────────────────────────
-def send_telegram_photo(photo_url: str, caption: str) -> None:
-    if not TELEGRAM_TOKEN or not CHAT_ID:
-        print("Fehler: Konfiguration unvollständig.")
-        return
+# ─────────────────── HILFSFUNKTIONEN ───────────────────
 
-    # Cache-Busting: Zeitstempel an URL hängen, damit Telegram das Bild neu lädt
-    busted_url = f"{photo_url}?t={int(time.time())}"
-    
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
-    payload = {
-        "chat_id": CHAT_ID,
-        "photo": busted_url,
-        "caption": caption,
-        "parse_mode": "Markdown",
-    }
-
-    try:
-        r = session.post(url, json=payload, timeout=15)
-        r.raise_for_status()
-    except Exception as e:
-        print(f"Telegram Fehler: {e}")
-
-# ─────────────────── LOGIK-FUNKTIONEN ────────────────
-def utc_to_local(utc_dt_string: str) -> str:
+def utc_to_local(utc_dt_string):
+    """Konvertiert NOAA-Zeitstempel in deutsche Lokalzeit."""
     try:
         utc_dt = datetime.strptime(utc_dt_string, "%Y-%m-%d %H:%M:%S")
         utc_dt = pytz.utc.localize(utc_dt)
-        return utc_dt.astimezone(GERMAN_TZ).strftime("%d.%m. %H:%M Uhr")
-    except:
-        return utc_dt_string
+        return utc_dt.astimezone(GERMAN_TZ)
+    except Exception:
+        return None
 
-def get_kp_symbol(kp: float) -> str:
+def get_kp_symbol(kp):
     if kp >= 7: return "🚨"
     if kp >= 6: return "🟠"
     return "📈"
 
-def check_solar_flares() -> str:
+def is_dark_in_germany():
+    """Prüft, ob es in DE aktuell zwischen 20:00 und 05:00 Uhr ist."""
+    now_de = datetime.now(GERMAN_TZ)
+    return now_de.hour >= 20 or now_de.hour <= 5
+
+# ─────────────────── KERN-MODULE ──────────────────────
+
+def check_solar_flares():
+    """Sucht nach starken Solar Flares (M/X Klasse)."""
     try:
         r = session.get(URL_ALERTS, timeout=10)
+        r.raise_for_status()
         alerts = r.json()
         for alert in alerts:
             msg = alert.get("message", "")
-            if "Space Weather Message Code: ALTTPX" in msg and ("Class M" in msg or "Class X" in msg):
-                return "💥 **SOLAR FLARE ALARM!**\nStarker Flare (M/X) registriert. Chance in 1-3 Tagen!\n\n"
-    except:
-        pass
+            if "Space Weather Message Code: ALTTPX" in msg:
+                if "Class M" in msg or "Class X" in msg:
+                    return "💥 **SOLAR FLARE ALARM!**\nStarker Ausbruch registriert. Polarlichter in 1-3 Tagen möglich!\n\n"
+    except Exception as e:
+        print(f"Fehler im Flare-Check: {e}")
     return ""
 
-# ───────────────── AURORA CHECK ──────────────────────
-def check_aurora() -> None:
-    now_de = datetime.now(GERMAN_TZ)
-    is_test = GITHUB_EVENT_NAME == "workflow_dispatch"
-    alert_text = ""
-
-    #  Solar Flares
-    alert_text += check_solar_flares()
-
-    # 2️⃣ Live-Check (Nur nachts zwischen 22:00 und 03:00 Uhr)
-    if 22 <= now_de.hour or now_de.hour < 3:
-        try:
-            live_data = session.get(URL_KP_LIVE, timeout=10).json()
-            latest_kp = float(live_data[-1]['kp_index'])
-            if latest_kp >= KP_THRESHOLD:
-                alert_text += f"🔴 **LIVE-ALARM: Kp {latest_kp}** (Gerade eben!)\n\n"
-        except:
-            pass
-
-    #  Kp-Forecast mit korrekter Trend-Logik
+def get_forecast_data():
+    """Holt Kp-Vorhersage und filtert nach deutschen Nachtstunden."""
+    forecast_text = ""
     try:
-        forecast = session.get(URL_KP_FORECAST, timeout=10).json()
-        found_kp = []
-        # Wir tracken den Trend über alle Intervalle
+        r = session.get(URL_KP_FORECAST, timeout=10)
+        r.raise_for_status()
+        forecast = r.json() # Format: [ ["time", "kp", ...], [...] ]
+        
+        found_intervals = []
+        # Wir starten bei Index 2, um prev_val aus Index 1 zu haben
         prev_val = float(forecast[1][1]) 
 
-        for entry in forecast[2:]: # Start ab dem zweiten Datenpunkt
+        for entry in forecast[2:]:
             curr_val = float(entry[1])
-            if curr_val >= KP_THRESHOLD:
-                local_time = utc_to_local(entry[0])
-                
-                # Trend-Symbol
-                if curr_val > prev_val: trend = "↗️"
-                elif curr_val < prev_val: trend = "↘️"
-                else: trend = "➡️"
-                
-                symbol = get_kp_symbol(curr_val)
-                found_kp.append(f"{symbol} Kp {curr_val} {trend} ({local_time})")
+            local_dt = utc_to_local(entry[0])
             
-            prev_val = curr_val # Update für den nächsten Schleifendurchlauf
+            if local_dt and curr_val >= KP_THRESHOLD:
+                # FILTER: Nur wenn das Vorhersage-Fenster in der deutschen Nacht liegt
+                if local_dt.hour >= 20 or local_dt.hour <= 5:
+                    trend = "↗️" if curr_val > prev_val else "↘️" if curr_val < prev_val else "➡️"
+                    symbol = get_kp_symbol(curr_val)
+                    time_str = local_dt.strftime("%d.%m. %H:%M Uhr")
+                    found_intervals.append(f"{symbol} Kp {curr_val} {trend} ({time_str})")
+            
+            prev_val = curr_val
 
-        if found_kp:
-            alert_text += "**Vorhersage (nächste Stunden):**\n" + "\n".join(found_kp[:3])
-    except:
-        pass
+        if found_intervals:
+            forecast_text = "**Vorhersage für die Nacht:**\n" + "\n".join(found_intervals[:4]) + "\n\n"
+    except Exception as e:
+        print(f"Fehler im Forecast-Check: {e}")
+    return forecast_text
 
-    #  Senden
-    if alert_text or is_test:
-        caption = "**BOT TESTLAUF**\n\n" if is_test else "**AURORA UPDATE**\n\n"
+def get_live_data():
+    """Prüft den aktuellen Echtzeit-Kp-Wert."""
+    try:
+        r = session.get(URL_KP_LIVE, timeout=10)
+        r.raise_for_status()
+        live_data = r.json()
+        latest_kp = float(live_data[-1]['kp_index'])
+        if latest_kp >= KP_THRESHOLD:
+            return f"🔴 **LIVE-ALARM: Kp {latest_kp}** (Gerade eben gemessen!)\n\n"
+    except Exception as e:
+        print(f"Fehler im Live-Check: {e}")
+    return ""
+
+# ─────────────────── HAUPTFUNKTION ────────────────────
+
+def run_bot():
+    is_test = (GITHUB_EVENT_NAME == "workflow_dispatch")
+    is_dark = is_dark_in_germany()
+    
+    flare_alert = check_solar_flares()
+    live_alert = get_live_data() if is_dark else ""
+    forecast_alert = get_forecast_data()
+    
+    # Logik: Wann senden wir?
+    # 1. Solar Flare gefunden (immer)
+    # 2. Es ist Nacht UND (Live-Alarm ODER Forecast-Alarm)
+    # 3. Es ist ein manueller Testlauf
+    
+    has_aurora_data = (live_alert != "" or forecast_alert != "")
+    should_send = flare_alert != "" or (is_dark and has_aurora_data) or is_test
+
+    if should_send:
+        # Nachricht zusammenbauen
+        caption = "🧪 **BOT TESTLAUF**\n\n" if is_test else "🌌 **AURORA UPDATE** 🌌\n\n"
         
-        if alert_text:
-            caption += alert_text
+        if flare_alert: caption += flare_alert
+        
+        if is_dark or is_test:
+            if has_aurora_data:
+                caption += live_alert + forecast_alert
+            else:
+                caption += "Aktuell keine erhöhten Kp-Werte für die Nachtstunden."
         else:
-            caption += "Aktuell keine erhöhten Werte (Kp < 6)."
-        
-        caption += f"\n\n Stand: {now_de.strftime('%H:%M')} Uhr (DE)"
-        
-        send_telegram_photo(URL_OVATION_MAP, caption)
+            caption += "Tagsüber werden keine Kp-Alarme gesendet (Warten auf die Nacht)."
+
+        caption += f"\n🕒 Stand: {datetime.now(GERMAN_TZ).strftime('%H:%M')} Uhr (DE)"
+
+        # Telegram Versand mit Cache-Busting
+        busted_url = f"{URL_OVATION_MAP}?t={int(time.time())}"
+        try:
+            r = session.post(
+                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
+                json={
+                    "chat_id": CHAT_ID,
+                    "photo": busted_url,
+                    "caption": caption,
+                    "parse_mode": "Markdown"
+                },
+                timeout=20
+            )
+            r.raise_for_status()
+            print("Erfolgreich an Telegram gesendet.")
+        except Exception as e:
+            print(f"Telegram Sende-Fehler: {e}")
+    else:
+        print("Keine relevanten Ereignisse. Bot bleibt stumm.")
 
 if __name__ == "__main__":
-    check_aurora()
+    run_bot()
