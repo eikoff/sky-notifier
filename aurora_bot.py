@@ -29,12 +29,16 @@ def utc_to_local(utc_dt_string):
         utc_dt = datetime.strptime(utc_dt_string, "%Y-%m-%d %H:%M:%S")
         utc_dt = pytz.utc.localize(utc_dt)
         return utc_dt.astimezone(GERMAN_TZ)
-    except Exception:
+    except Exception as e:
+        print(f"Fehler bei Zeitumrechnung: {e}")
         return None
 
 def get_kp_symbol(kp):
-    if kp >= 7: return "🚨"
-    if kp >= 6: return "🟠"
+    """Gibt ein Emoji basierend auf dem Kp-Wert zurück."""
+    if kp >= 7: 
+        return "🚨"
+    if kp >= 6: 
+        return "🟠"
     return "📈"
 
 def is_dark_in_germany():
@@ -60,12 +64,15 @@ def check_solar_flares():
     return ""
 
 def get_forecast_data():
-    """Holt Kp-Vorhersage und filtert nach deutschen Nachtstunden."""
+    """Holt Kp-Vorhersage und filtert nach zukünftigen deutschen Nachtstunden."""
     forecast_text = ""
     try:
         r = session.get(URL_KP_FORECAST, timeout=10)
         r.raise_for_status()
         forecast = r.json() # Format: [ ["time", "kp", ...], [...] ]
+        
+        # Aktuelle Zeit in deutscher Zeitzone
+        now_de = datetime.now(GERMAN_TZ)
         
         found_intervals = []
         # Wir starten bei Index 2, um prev_val aus Index 1 zu haben
@@ -76,12 +83,14 @@ def get_forecast_data():
             local_dt = utc_to_local(entry[0])
             
             if local_dt and curr_val >= KP_THRESHOLD:
-                # FILTER: Nur wenn das Vorhersage-Fenster in der deutschen Nacht liegt
-                if local_dt.hour >= 20 or local_dt.hour <= 5:
-                    trend = "↗️" if curr_val > prev_val else "↘️" if curr_val < prev_val else "➡️"
-                    symbol = get_kp_symbol(curr_val)
-                    time_str = local_dt.strftime("%d.%m. %H:%M Uhr")
-                    found_intervals.append(f"{symbol} Kp {curr_val} {trend} ({time_str})")
+                # FILTER: Nur zukünftige Zeiten
+                if local_dt > now_de:
+                    # FILTER: Nur wenn das Vorhersage-Fenster in der deutschen Nacht liegt
+                    if local_dt.hour >= 20 or local_dt.hour <= 5:
+                        trend = "↗️" if curr_val > prev_val else "↘️" if curr_val < prev_val else "➡️"
+                        symbol = get_kp_symbol(curr_val)
+                        time_str = local_dt.strftime("%d.%m. %H:%M Uhr")
+                        found_intervals.append(f"{symbol} Kp {curr_val} {trend} ({time_str})")
             
             prev_val = curr_val
 
@@ -126,7 +135,8 @@ def run_bot():
         # Nachricht zusammenbauen
         caption = "🧪 **BOT TESTLAUF**\n\n" if is_test else "🌌 **AURORA UPDATE** 🌌\n\n"
         
-        if flare_alert: caption += flare_alert
+        if flare_alert: 
+            caption += flare_alert
         
         if is_dark or is_test:
             if has_aurora_data:
