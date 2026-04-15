@@ -87,5 +87,5 @@ def check_planes():
         requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage", 
                       json={"chat_id": CHAT_ID, "text": "🧪 **TEST**: System aktiv. Keine 'Specials' im Anflug."})
 
-if __name__ == "__main__":
-    check_planes()
+#if __name__ == "__main__":
+#    check_planes()
